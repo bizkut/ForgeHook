@@ -48,12 +48,14 @@ It builds on PVE existing hook mechanism so you can extend or customize randomiz
 
 > You can extend these; the lists below are included as **examples**.
 
-- **HDD** — sample pool of 6 vendors  
-- **Mainboard** — sample pool of 5 vendors  
-- **RAM** — sample pool of 4 vendors (configurable `SPEED`, `Size`, `SERIAL`)  
-- **BIOS UUID** (via `smbios1`)  
-- **BIOS Serial** (`-smbios type=3` and `type=4`)  
-- **vmgenid`
+- **LAN MAC** — randomize Intel E1000 MAC address (can be toggled ON/OFF)
+- **HDD** — supports all types: (`ide | sata | scsi | virtio`)
+- **Mainboard** — sample pool of 5 vendors
+- **RAM** — sample pool of 4 vendors (configurable `VENDOR`, `SPEED`, `SERIAL`)
+- **BIOS UUID** (via `smbios1`)
+- **BIOS Serial** (`-smbios type=0, 1, 2, 3, 17, 8, 11`)
+- **BIOS type=4** — directly uses the Host CPU values (since it always reflects the host)
+- **vmgenid**
 
 📝 **Note:** CPU spoofing is intentionally **not** included.  
 If needed, set a CPU type to match the host for consistency.
@@ -88,19 +90,24 @@ Once Snippets is enabled, you can use Hook Scripts.
 
 Put the script files from this project into:
 
-/var/lib/vz/snippets
+`/var/lib/vz/snippets`
 
 This project currently includes 4 key components:
 
-1. forgehook-once.sh  
-2. forgehook-repeat.sh  
+1. forgehook-once.sh
+2. forgehook-repeat.sh
 3. vm-restart.sh  
 4. Folder log-hook
 
-Make sure all 4 are executable:
+Make sure all 4 are executable:   
 
-cd /var/lib/vz/snippets  
+```
+cd /var/lib/vz/snippets
+```
+
+```
 chmod +x *.*
+```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -108,22 +115,27 @@ chmod +x *.*
 
 ### 🔹 forgehook-once.sh
 - Runs only **once**.  
-- On VM start, if no `serial=` is found in `VMID.conf`, the script will insert one and randomize values.  
-- Tested with **a single HDD** (not yet with multiple). Future updates may expand this.
+- Uses `tags:` to trigger execution (no need to manually edit `VMID.conf`).  
+- Just add the tag `forgehook` (all lowercase) in the VM’s settings via the Proxmox Web UI,  
+  and this script will automatically run.  
+- After the randomization completes, the tag `forgehook` is automatically removed —  
+  indicating the process is finished and it will run only once.
 
 ### 🔹 forgehook-repeat.sh
-- Similar to `forgehook-once.sh`, but randomizes on **every VM start**.  
-- Use this if you want new HWIDs each time.
+- Similar to **forgehook-once.sh**, but does **not** require the `forgehook` tag.  
+- Runs automatically without adding any tag.  
+- While running, a temporary tag `forgehook-repeat` will appear in the Proxmox Web UI.  
+  After completion, this tag is automatically removed — indicating the process finished successfully.  
+- Use this if you want the VM’s **HWID to be randomized every time** the VM starts.
 
 ### 🔹 vm-restart.sh
 - Works **together with the above hooks**.  
-- Ensures new values in `VMID.conf` are properly applied by stopping & restarting the VM automatically.  
-- Allows you to configure a delay for stop/start.  
-- Skips redundant actions if `serial=` already exists.
+- This script will **stop the VM and start it again** so that all randomized values are fully applied.  
+- By forcing a full stop/start cycle, it guarantees the VM always receives the new values right from the very first run.  
 
 ### 🔹 log-hook (folder)
 - Stores logs of generated HWIDs.  
-- Files are named `hwid-<VMID>`.  
+- Files are named `/log-hook/hwid-spoofer/hwid-<VMID>`.  
 - Ensures **no duplicate randomization** across VMs (e.g., if 5 mainboards exist, it won’t pick the same one twice until all have been used).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -131,40 +143,95 @@ chmod +x *.*
 ## 4. Configure `VMID.conf`
 
 Location:  
-/etc/pve/qemu-server/${VMID}.conf
+`/etc/pve/qemu-server/${VMID}.conf`
 
-Example snippet:
+Place this line at the **very bottom** of the configuration file,  
+or follow the placement shown in the example.  
 
-args: -cpu host,....(your custom values)....  
-hookscript: local:snippets/forgehook-once.sh  
-hostpci0: 0000:02:00.0,mdev=nvidia-54  
-machine: pc-q35-7.2  
-scsi0: nvme0:141/vm-141-disk-1.qcow2,cache=writeback,discard=on,iothread=1,size=120G,ssd=1
+(Other positions will also work, as long as the keyword and value are written correctly!)
 
-👉 Note: the hook will automatically append `,serial=<HWID>` to your disk line.  
-Make sure `,ssd=1` is present, as the script looks for this flag.
+```
+hookscript: local:snippets/forgehook-once.sh
+```
+
+**VMID.conf Example:**
+
+args: -cpu host,....(your custom values)....   
+hookscript: local:snippets/forgehook-once.sh   
+hostpci0: 0000:02:00.0,mdev=nvidia-54   
+machine: pc-q35-7.2   
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔧 5. Options in `forgehook`
+
+- I added toggle options to make randomization more convenient. Some programs inside the VM don’t like getting a new LAN MAC every time, so you can turn MAC randomization on/off for flexibility with different games and apps.  
+  1 = enable, 0 = disable  
+  `ENABLE_RANDOM_MAC=1`
+
+- Based on feedback from @t4bby, there is also a toggle for adding custom **ACPI tables** in args.   
+This improves flexibility today and serves as a pattern for future on/off switches in other parts of the code.    
+  `ENABLE_ACPITABLE=1`
+
+- **Presets for Mainboard & BIOS**  
+  You can freely add vendors, models, BIOS vendors, and versions. In the example below, five X99 boards are provided.  
+  Tip: pick real boards that match your host CPU so things look consistent and realistic.  
+   
+  PRESETS=(   
+      "ASUS|X99-E WS|American Megatrends Inc.|3501"   
+      "Supermicro|X10SRL-F|Supermicro|3.1"   
+      "ASRock|X99 WS-E/10G|American Megatrends Inc.|P3.40"   
+      "MSI|X99A WORKSTATION|American Megatrends Inc.|7885v18"   
+      "Gigabyte|GA-X99-UD7 WIFI|American Megatrends Inc.|F23"   
+  )   
+  
+- **Presets for RAM**  
+  Just like the mainboard presets, you can customize freely.  
+    
+  RAM_BRANDS=("Samsung" "Corsair" "Kingston" "Crucial")   
+  RAM_SPEEDS=(2133 2400 2666 3200)  
+
+👉 For other values (HDD, UUID, etc.), no manual setup is required.    
+I aligned the behavior with the approach from **Li Xiaoliu** & **DadaShuai666**.    
+If a field shouldn’t be randomized, it’s set to a realistic default string to keep things authentic.   
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ## 🔄 Re-randomizing with `forgehook-once.sh`
 
-1. Stop the VM.  
-2. Edit `/etc/pve/qemu-server/${VMID}.conf`.  
-3. Remove the current serial, e.g.:
+1. **Stop** the VM.  
+2. Open the **Proxmox Web UI** and select the VM you want to re-randomize.  
+3. Click the **pencil icon** to edit tags.  
+4. Add a new tag: type `forgehook` (all lowercase).  
+5. You will now see the `forgehook` tag appear Beside the number VM.  
+6. **Start** the VM.  
+7. The script will randomize the HWID.  
+   Once it finishes, the `forgehook` tag is automatically removed —  
+   indicating the process completed successfully.  
 
-scsi0: ... ,ssd=1,serial=0025B5674421A2D8F6W3
+🥳 This method is easier than the old way of editing values directly in `VMID.conf`.  
 
-→ becomes:
+💡 It offers more flexibility and convenience — and if you have many VMs to randomize,  
+   this approach makes the process much simpler and more reliable.
 
-scsi0: ... ,ssd=1
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-4. Save the file.  
-5. Start the VM. The script will stop & restart it once more, applying a new HWID.
+## 🔄 Using `forgehook-repeat.sh` for re-randomization on every start   
 
-💡 **Note (Future improvement):**  
-In the future, I plan to add a function that references existing configuration points already available in the PVE web interface.  
-This will allow adjustments without directly editing the `VMID.conf` file,  
-making the workflow easier and more convenient than manually opening and modifying the file.
+1. **Stop** the VM  
+2. Edit the file: `/etc/pve/qemu-server/${VMID}.conf`  
+3. Change from:  
+   hookscript: local:snippets/forgehook-once.sh  
+   to:  
+   hookscript: local:snippets/forgehook-repeat.sh  
+4. Save the file  
+5. **Start** the VM  
+
+🔭 You will see the tag `forgehook-repeat` appear.  
+After a short while, it disappears automatically once the randomization is complete.  
+
+🤖 Behavior of `forgehook-repeat`:  
+- The system will re-randomize **only when you start the VM again**.   
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -185,6 +252,15 @@ I’d like to take a moment to thank the people whose work and ideas inspired Fo
   A talented creator in the Linux virtualization scene.  
   Many of your adaptations and ideas inspired my own.  
   Even though my main focus is on PVE, your work has broadened what’s possible and brought valuable variety to this space.  
+
+---
+
+## 🏘️ Contributors & Ideas
+
+- **t4bby**   
+  Suggested using **dmidecode** to fetch CPU values directly, reducing complexity.  
+  Also introduced the idea of adding an **enable/disable option for custom ACPI tables** in args,  
+  which makes the codebase more flexible and user-friendly.
 
 ---
 
