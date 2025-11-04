@@ -24,11 +24,26 @@ ENABLE_ACPITABLE=1
 
 # Preset Mainboard (Vendor|Model|BIOS Vendor|BIOS Version)
 PRESETS=(
-    "ASUS|X99-E WS|American Megatrends Inc.|3501"
-    "Supermicro|X10SRL-F|Supermicro|3.1"
-    "ASRock|X99 WS-E/10G|American Megatrends Inc.|P3.40"
-    "MSI|X99A WORKSTATION|American Megatrends Inc.|7885v18"
-    "Gigabyte|GA-X99-UD7 WIFI|American Megatrends Inc.|F23"
+    "ASUS|B85M-G|American Megatrends Inc.|0904"
+    "ASUS|Q87M-E/CSM|American Megatrends Inc.|1102"
+    "ASUS|SABERTOOTH Z87|American Megatrends Inc.|1803"
+    "GIGABYTE|GA-Z97X-UD3H|American Megatrends Inc.|F4"
+    "ASRock|H97 PRO4|American Megatrends Inc.|P1.60"
+    "ASRock|FATAL1TY H97 PERFORMANCE|American Megatrends Inc.|P1.70"
+    "ASUS|H97-PLUS|American Megatrends Inc.|2501"
+    "ASUS|H97-PRO|American Megatrends Inc.|2601"
+    "ASUS|H97I-PLUS|American Megatrends Inc.|2603"
+    "ASUS|Z97-A|American Megatrends Inc.|2601"
+    "ASUS|Z97-DELUXE|American Megatrends Inc.|2401"
+    "ASUS|Z97I-PLUS|American Megatrends Inc.|2603"
+    "GIGABYTE|GA-H97-D3H|American Megatrends Inc.|F7"
+    "MSI|Z97 GUARD-PRO|American Megatrends Inc.|1.9"
+    "MSI|Z97-G55 SLI|American Megatrends Inc.|1.A"
+    "MSI|Z97-GD65 GAMING|American Megatrends Inc.|1.B"
+    "MSI|Z97-GAMING 7|American Megatrends Inc.|1.B"
+    "MSI|Z97-G45 GAMING|American Megatrends Inc.|2.8"
+    "GIGABYTE|GA-H97-HD3|American Megatrends Inc.|F7"
+    "MSI|Z97 MPOWER|American Megatrends Inc.|1.A"
 )
 
 # Preset Memory
@@ -93,26 +108,11 @@ if [[ "$PHASE" == "pre-start" ]]; then
         RAM_PART="$(tr -dc 'A-Z0-9' </dev/urandom | head -c 12)-$(tr -dc 'A-Z0-9' </dev/urandom | head -c 5)"
         ASSET_RAM="$(tr -dc '0-9' </dev/urandom | head -c 10)"
     
-        # Get CPU info from dmidecode (SMBIOS type 4)
-        # Added via PR by @t4bby (for CPU host-passthrough support)
-        DMIDECODE_MANUFACTURER=$(dmidecode -t 4 | grep 'Manufacturer:' | head -n1 | awk -F': ' '{print $2}')
-        DMIDECODE_VERSION=$(dmidecode -t 4 | grep 'Version:' | head -n1 | awk -F': ' '{print $2}')
-        DMIDECODE_SOCKET=$(dmidecode -t 4 | grep 'Upgrade: Socket ' | head -n1 | sed 's/Upgrade: Socket //' | xargs)
-        DMIDECODE_MAX_SPEED=$(dmidecode -t 4 | grep 'Max Speed:' | head -n1 | awk -F': ' '{print $2}' | awk '{print $1}')
-        DMIDECODE_CUR_SPEED=$(dmidecode -t 4 | grep 'Current Speed:' | head -n1 | awk -F': ' '{print $2}' | awk '{print $1}')
-        DMIDECODE_SERIAL=$(dmidecode -t 4 | grep 'Serial Number:' | head -n1 | awk -F': ' '{print $2}')
-        DMIDECODE_ASSET=$(dmidecode -t 4 | grep 'Asset Tag:' | head -n1 | awk -F': ' '{print $2}' | xargs)
-        DMIDECODE_PART=$(dmidecode -t 4 | grep 'Part Number:' | head -n1 | awk -F': ' '{print $2}' | xargs)
     
-        # Check String DMIDECODE_MAX_SPEED
-        if [[ "$DMIDECODE_MAX_SPEED" =~ ^[0-9]+$ ]]; then
-            FINAL_DMIDECODE_MAX_SPEED=$DMIDECODE_MAX_SPEED
-        else
-            # Random CPU MaxSpeed 500–1500 step 100
-            OFFSET=$(( ( (RANDOM % 11) + 5 ) * 100 ))
-            FINAL_DMIDECODE_MAX_SPEED=$((DMIDECODE_CUR_SPEED + OFFSET))
-        fi
-    
+        # Set CPU type to Skylake-Server
+        sed -i '/^cpu:/d' "$CONF"
+        echo "cpu: Skylake-Server" >> "$CONF"
+
         # Add args in VMID.conf
         sed -i '/^args:/d' "$CONF"
     
@@ -125,12 +125,12 @@ if [[ "$PHASE" == "pre-start" ]]; then
             ARGS_LIST+=("-acpitable file=/root/hpet.aml")
         fi
     
-        ARGS_LIST+=("-cpu host,hypervisor=off,vmware-cpuid-freq=false,enforce=false,host-phys-bits=true")
+        ARGS_LIST+=("-cpu Skylake-Server,hypervisor=off,vmware-cpuid-freq=false,enforce=false,host-phys-bits=true")
         ARGS_LIST+=("-smbios type=0,vendor=\"$BIOS_VENDOR\",version=\"$BIOS_VERSION\",date=\"$BIOS_DATE\",release=$BIOS_RELEASE")
         ARGS_LIST+=("-smbios type=1,manufacturer=\"$MBD_VENDOR\",product=\"$MBD_MODEL\",version=\"$BIOS_VERSION\",serial=\"Default string\",sku=\"Default string\",family=\"Default string\"")
         ARGS_LIST+=("-smbios type=2,manufacturer=\"$MBD_VENDOR\",product=\"$MBD_MODEL\",version=\"$BIOS_VERSION\",serial=\"Default string\",asset=\"Default string\",location=\"Slot0\"")
         ARGS_LIST+=("-smbios type=3,manufacturer=\"$MBD_VENDOR\",version=\"$BIOS_VERSION\",serial=\"Default string\",asset=\"Default string\",sku=\"Default string\"")
-        ARGS_LIST+=("-smbios type=4,sock_pfx=\"$DMIDECODE_SOCKET\",manufacturer=\"$DMIDECODE_MANUFACTURER\",version=\"$DMIDECODE_VERSION\",max-speed=$FINAL_DMIDECODE_MAX_SPEED,current-speed=$DMIDECODE_CUR_SPEED,serial=\"$DMIDECODE_SERIAL\",asset=\"$DMIDECODE_ASSET\",part=\"$DMIDECODE_PART\"")
+        ARGS_LIST+=("-smbios type=4,sock_pfx=\"Socket 1150\",manufacturer=\"Intel\",version=\"Intel(R) Core(TM) i7-4790 CPU @ 3.60GHz\",max-speed=4000,current-speed=3600,serial=\"$(randstr 10)\",asset=\"$(randstr 10)\",part=\"$(randstr 10)\"")
         ARGS_LIST+=("-smbios type=17,loc_pfx=\"ChannelA-DIMM0\",manufacturer=\"$RAM_BRAND\",speed=$RAM_SPEED,serial=\"$RAM_SERIAL\",part=\"$RAM_PART\",bank=\"BANK 0\",asset=\"$ASSET_RAM\"")
         ARGS_LIST+=("-smbios type=8,internal_reference=\"CPU FAN\",external_reference=\"Not Specified\",connector_type=0xFF,port_type=0xFF")
         ARGS_LIST+=("-smbios type=8,internal_reference=\"J3C1 - GMCH FAN\",external_reference=\"Not Specified\",connector_type=0xFF,port_type=0xFF")
