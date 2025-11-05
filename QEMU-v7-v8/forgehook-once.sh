@@ -24,26 +24,52 @@ ENABLE_ACPITABLE=1
 
 # Preset Mainboard (Vendor|Model|BIOS Vendor|BIOS Version)
 PRESETS=(
-    "ASUS|B85M-G|American Megatrends Inc.|0904"
-    "ASUS|Q87M-E/CSM|American Megatrends Inc.|1102"
-    "ASUS|SABERTOOTH Z87|American Megatrends Inc.|1803"
-    "GIGABYTE|GA-Z97X-UD3H|American Megatrends Inc.|F4"
-    "ASRock|H97 PRO4|American Megatrends Inc.|P1.60"
-    "ASRock|FATAL1TY H97 PERFORMANCE|American Megatrends Inc.|P1.70"
-    "ASUS|H97-PLUS|American Megatrends Inc.|2501"
-    "ASUS|H97-PRO|American Megatrends Inc.|2601"
-    "ASUS|H97I-PLUS|American Megatrends Inc.|2603"
-    "ASUS|Z97-A|American Megatrends Inc.|2601"
-    "ASUS|Z97-DELUXE|American Megatrends Inc.|2401"
-    "ASUS|Z97I-PLUS|American Megatrends Inc.|2603"
-    "GIGABYTE|GA-H97-D3H|American Megatrends Inc.|F7"
-    "MSI|Z97 GUARD-PRO|American Megatrends Inc.|1.9"
-    "MSI|Z97-G55 SLI|American Megatrends Inc.|1.A"
-    "MSI|Z97-GD65 GAMING|American Megatrends Inc.|1.B"
-    "MSI|Z97-GAMING 7|American Megatrends Inc.|1.B"
-    "MSI|Z97-G45 GAMING|American Megatrends Inc.|2.8"
-    "GIGABYTE|GA-H97-HD3|American Megatrends Inc.|F7"
-    "MSI|Z97 MPOWER|American Megatrends Inc.|1.A"
+    "ASUS|H110M-A/M.2|American Megatrends Inc.|3807"
+    "ASUS|H110M-K|American Megatrends Inc.|3805"
+    "ASUS|H110M-R/C/SI|American Megatrends Inc.|3806"
+    "ASUS|H110-PLUS|American Megatrends Inc.|3801"
+    "ASUS|Z170-A|American Megatrends Inc.|3802"
+    "ASUS|Z170-DELUXE|American Megatrends Inc.|3801"
+    "ASUS|Z170-PRO|American Megatrends Inc.|3801"
+    "ASUS|Z170-PRO-GAMING|American Megatrends Inc.|3805"
+    "ASUS|MAXIMUS VIII HERO|American Megatrends Inc.|3802"
+    "ASUS|MAXIMUS VIII RANGER|American Megatrends Inc.|3802"
+    "GIGABYTE|GA-H110M-A|American Megatrends Inc.|F25"
+    "GIGABYTE|GA-H110M-S2H|American Megatrends Inc.|F25"
+    "GIGABYTE|GA-H170-D3H|American Megatrends Inc.|F22"
+    "GIGABYTE|GA-B150M-D3H|American Megatrends Inc.|F25"
+    "GIGABYTE|GA-Z170X-GAMING 3|American Megatrends Inc.|F23"
+    "MSI|H110M PRO-D|American Megatrends Inc.|2.C"
+    "MSI|H170A PC MATE|American Megatrends Inc.|C.9"
+    "MSI|B150M MORTAR|American Megatrends Inc.|B.B"
+    "MSI|Z170A GAMING M5|American Megatrends Inc.|1.G"
+    "ASRock|H110M-DGS|American Megatrends Inc.|7.50"
+)
+
+# Preset CPUs
+CPU_PRESETS=(
+    "Skylake-Server-6700K"
+    "Skylake-Server-6700"
+    "Skylake-Server-6700T"
+    "Skylake-Server-6600K"
+    "Skylake-Server-6600"
+    "Skylake-Server-6500"
+    "Skylake-Server-6500T"
+    "Skylake-Server-6400"
+    "Skylake-Server-6400T"
+    "Skylake-Server-6350"
+    "Skylake-Server-6300"
+    "Skylake-Server-6100"
+    "Skylake-Server-6100T"
+    "Skylake-Server-G4500"
+    "Skylake-Server-G4400"
+    "Skylake-Server-G4400T"
+    "Skylake-Server-G3900"
+    "Skylake-Server-G3900T"
+    "Skylake-Server-G3920"
+    "Skylake-Server-G4400TE"
+    "Skylake-Server-G3900E"
+    "Skylake-Server-G3902E"
 )
 
 # Preset Memory
@@ -109,9 +135,12 @@ if [[ "$PHASE" == "pre-start" ]]; then
         ASSET_RAM="$(tr -dc '0-9' </dev/urandom | head -c 10)"
     
     
-        # Set CPU type to Skylake-Server
+        # Randomize CPU
+        CPU_MODEL=${CPU_PRESETS[$RANDOM % ${#CPU_PRESETS[@]}]}
+
+        # Set CPU type
         sed -i '/^cpu:/d' "$CONF"
-        echo "cpu: Skylake-Server" >> "$CONF"
+        echo "cpu: $CPU_MODEL" >> "$CONF"
 
         # Add args in VMID.conf
         sed -i '/^args:/d' "$CONF"
@@ -125,12 +154,12 @@ if [[ "$PHASE" == "pre-start" ]]; then
             ARGS_LIST+=("-acpitable file=/root/hpet.aml")
         fi
     
-        ARGS_LIST+=("-cpu Skylake-Server,hypervisor=off,vmware-cpuid-freq=false,enforce=false,host-phys-bits=true")
+        ARGS_LIST+=("-cpu $CPU_MODEL,hypervisor=off,vmware-cpuid-freq=false,enforce=false,host-phys-bits=true")
         ARGS_LIST+=("-smbios type=0,vendor=\"$BIOS_VENDOR\",version=\"$BIOS_VERSION\",date=\"$BIOS_DATE\",release=$BIOS_RELEASE")
         ARGS_LIST+=("-smbios type=1,manufacturer=\"$MBD_VENDOR\",product=\"$MBD_MODEL\",version=\"$BIOS_VERSION\",serial=\"Default string\",sku=\"Default string\",family=\"Default string\"")
         ARGS_LIST+=("-smbios type=2,manufacturer=\"$MBD_VENDOR\",product=\"$MBD_MODEL\",version=\"$BIOS_VERSION\",serial=\"Default string\",asset=\"Default string\",location=\"Slot0\"")
         ARGS_LIST+=("-smbios type=3,manufacturer=\"$MBD_VENDOR\",version=\"$BIOS_VERSION\",serial=\"Default string\",asset=\"Default string\",sku=\"Default string\"")
-        ARGS_LIST+=("-smbios type=4,sock_pfx=\"Socket 1150\",manufacturer=\"Intel\",version=\"Intel(R) Core(TM) i7-4790 CPU @ 3.60GHz\",max-speed=4000,current-speed=3600,serial=\"$(randstr 10)\",asset=\"$(randstr 10)\",part=\"$(randstr 10)\"")
+        ARGS_LIST+=("-smbios type=4,sock_pfx=\"Socket 1151\",manufacturer=\"Intel\",version=\"Intel(R) Core(TM) ${CPU_MODEL##*-} CPU @ 3.60GHz\",max-speed=4000,current-speed=3600,serial=\"$(randstr 10)\",asset=\"$(randstr 10)\",part=\"$(randstr 10)\"")
         ARGS_LIST+=("-smbios type=17,loc_pfx=\"ChannelA-DIMM0\",manufacturer=\"$RAM_BRAND\",speed=$RAM_SPEED,serial=\"$RAM_SERIAL\",part=\"$RAM_PART\",bank=\"BANK 0\",asset=\"$ASSET_RAM\"")
         ARGS_LIST+=("-smbios type=8,internal_reference=\"CPU FAN\",external_reference=\"Not Specified\",connector_type=0xFF,port_type=0xFF")
         ARGS_LIST+=("-smbios type=8,internal_reference=\"J3C1 - GMCH FAN\",external_reference=\"Not Specified\",connector_type=0xFF,port_type=0xFF")
